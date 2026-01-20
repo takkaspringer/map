@@ -1,394 +1,453 @@
---- START OF FILE Paste January 20, 2026 - 2:49PM ---
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Map Duck V55 - UI Optimized</title>
+    <title>Map Duck V50 - Minimap Expand</title>
     <style>
+        :root {
+            --bg-dark: #0a0a0f;
+            --panel-bg: rgba(20, 20, 30, 0.95);
+            --accent-blue: #3e48d6;
+            --accent-green: #228b22;
+            --accent-gold: #ffd700;
+            --text-main: #ffffff;
+        }
+
         body {
-            background-color: #050505; color: #fff; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            text-align: center; margin: 0; padding: 0;
-            overflow: hidden; height: 100vh; width: 100vw;
-            user-select: none; -webkit-user-select: none;
-            touch-action: none;
+            background-color: var(--bg-dark); color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0; padding: 0; overflow: hidden; height: 100vh; width: 100vw;
+            user-select: none; -webkit-user-select: none; touch-action: none;
         }
 
-        /* --- UIトグルボタン (右上) --- */
+        /* --- メインキャンバス --- */
+        #game-container { position: relative; width: 100%; height: 100%; background-color: #000; z-index: 1; }
+        canvas { display: block; image-rendering: pixelated; width: 100%; height: 100%; }
+
+        /* --- UIトグルボタン --- */
         #ui-toggle-btn {
-            position: absolute; top: 15px; right: 15px; z-index: 1000;
-            background: #3e48d6; color: #fff; border: 2px solid #fff;
-            padding: 12px 20px; cursor: pointer; border-radius: 30px; 
-            font-weight: bold; font-size: 16px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            transition: all 0.3s ease;
-            display: flex; align-items: center; gap: 8px;
+            position: absolute; top: 20px; right: 20px; z-index: 1000;
+            background: var(--accent-blue); color: white; border: 2px solid white;
+            padding: 12px 24px; cursor: pointer; border-radius: 30px; 
+            font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            display: flex; align-items: center; gap: 8px; transition: 0.3s;
         }
-        #ui-toggle-btn.active {
-            background: #d63e3e;
-            transform: scale(1.05);
-        }
+        #ui-toggle-btn.active { background: #d63e3e; }
 
-        /* --- UIパネルレイヤー (右側スライド式) --- */
+        /* --- 右側スライドメニュー --- */
         #ui-layer {
             position: absolute; top: 0; right: 0; z-index: 500;
-            width: 300px; height: 100vh;
-            background: rgba(15, 15, 25, 0.95);
-            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
-            border-left: 1px solid rgba(255,255,255,0.2);
-            box-shadow: -5px 0 25px rgba(0,0,0,0.8);
+            width: 320px; height: 100vh; background: var(--panel-bg);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border-left: 1px solid rgba(255,255,255,0.1);
             transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            transform: translateX(0); /* デフォルト表示 */
-            display: flex; flex-direction: column;
-            padding-top: 80px; /* ボタンを避ける */
-            box-sizing: border-box;
+            transform: translateX(0); display: flex; flex-direction: column;
+            padding-top: 85px; box-sizing: border-box;
         }
-        
-        /* 隠すときは右へ完全に隠す */
         #ui-layer.hidden { transform: translateX(105%); }
 
-        /* スクロールエリア */
-        .ui-scroll-container {
+        .ui-scroll-area {
             flex: 1; overflow-y: auto; padding: 0 20px 40px 20px;
             -webkit-overflow-scrolling: touch;
         }
 
         .panel {
-            background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 12px; 
-            border: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;
+            background: rgba(255, 255, 255, 0.05); padding: 16px; border-radius: 12px; 
+            border: 1px solid rgba(255,255,255,0.1); margin-bottom: 16px;
         }
 
-        h1 { margin: 0 0 12px 0; font-size: 16px; color: #ffd700; border-bottom: 1px solid #444; padding-bottom: 5px; text-align: left; }
-        
+        h1 { margin: 0 0 12px 0; font-size: 18px; color: var(--accent-gold); border-bottom: 1px solid #444; padding-bottom: 8px; }
+        h2 { font-size: 14px; margin: 10px 0 5px; color: #ccc; }
+
         .btn {
             background: #444; color: white; border: 1px solid #666;
             padding: 12px; cursor: pointer; font-size: 14px; margin-bottom: 8px;
             display: block; width: 100%; box-sizing: border-box; text-align: center; border-radius: 10px;
-            font-weight: 500;
+            font-weight: bold; text-decoration: none;
         }
-        .btn:active { transform: scale(0.97); background: #555; }
-        .btn-blue { background: #3e48d6; border-color: #5c67ff; }
-        .btn-green { background: #228b22; border-color: #32cd32; }
-        .btn-yellow { background: #daa520; color: #000; font-weight: bold; border-color: #fff; }
-        .btn-red { background: #8b0000; border-color: #f55; }
-        .btn-cyan { background: #008b8b; color:#fff;}
-        .btn-purple { background: #6a1b9a; border-color: #9c27b0; }
-        .btn-toggle.active { background: #d63e3e; border: 1px solid #f55; }
+        .btn:active { transform: scale(0.96); opacity: 0.8; }
+        .btn-main { background: var(--accent-blue); border-color: #fff; }
+        .btn-success { background: var(--accent-green); border: none; }
+        .btn-warn { background: var(--accent-gold); color: #000; border: none; }
 
-        #floor-list {
-            margin-bottom: 10px; max-height: 150px; overflow-y: auto;
-            background: rgba(0,0,0,0.2); border-radius: 8px; padding: 5px;
-        }
-        .floor-item {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 10px; margin-bottom: 5px; cursor: pointer; border-radius: 6px;
-            border: 1px solid transparent; font-size: 14px;
-        }
-        .floor-item.active { background: #3e48d6; border-color: #fff; }
-
-        input[type="file"] { display: none; }
-        .slider-row { margin-bottom: 15px; font-size: 12px; text-align: left; }
-        input[type=range] { width: 100%; height: 30px; }
-
-        #game-container { position: relative; width: 100%; height: 100%; background-color: #111; z-index: 10; }
-        canvas { display: block; image-rendering: pixelated; width: 100%; height: 100%; object-fit: contain; }
-
-        /* ミニマップ (左下へ移動してメニューと被らないように) */
+        /* --- ミニマップ (クリックで拡大) --- */
         #minimap-container {
-            position: absolute; bottom: 20px; left: 20px; z-index: 100;
-            border: 2px solid #fff; background: #000;
+            position: absolute; bottom: 25px; left: 25px; z-index: 100;
+            border: 2px solid #fff; background: #000; 
             width: 120px; border-radius: 8px; overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+        /* 拡大時のスタイル */
+        #minimap-container.expanded {
+            width: 85vw; height: auto;
+            max-height: 80vh;
+            bottom: 50%; left: 50%;
+            transform: translate(-50%, 50%);
+            z-index: 2000; /* UIより前面に表示 */
+            border: 4px solid var(--accent-gold);
         }
         #minimap { width: 100%; display: block; height: auto; }
 
-        /* エディタUIのパレット */
-        #editor-ui { border-top: 1px dashed #555; margin-top: 15px; padding-top: 15px; display: none; }
-        .palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        /* ミニマップ拡大中であることを示すオーバーレイ */
+        #minimap-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 1500; display: none;
+        }
+        #minimap-overlay.show { display: block; }
+
+        /* --- 操作用 D-Pad --- */
+        #d-pad { position: absolute; bottom: 30px; left: 160px; z-index: 100; display: none; }
+        .d-grid { display: grid; grid-template-columns: 55px 55px 55px; grid-template-rows: 55px 55px; gap: 5px; }
+        .d-btn { 
+            background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 12px; display: flex; align-items: center; justify-content: center;
+            font-size: 24px; color: #fff; backdrop-filter: blur(5px);
+        }
+
+        #status-bar { margin-top: 10px; font-size: 12px; color: var(--accent-gold); font-weight: bold; }
+        input[type="file"] { display: none; }
+
+        .overlay {
+            position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.9);
+            z-index: 3000; display: none; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .overlay.show { display: flex; }
+
+        #floor-list { margin-bottom: 10px; max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; }
+        .floor-item {
+            display: flex; justify-content: space-between; padding: 12px; 
+            border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer;
+        }
+        .floor-item.active { background: var(--accent-blue); }
+
+        .palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
         .p-item {
-            aspect-ratio: 1; border: 1px solid #555; cursor: pointer;
+            aspect-ratio: 1; border: 2px solid #555; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
             font-size: 20px; background: #222; border-radius: 8px;
         }
-        .p-item.selected { border: 2px solid #ffd700; background: #444; }
-        
-        #status { margin-top:10px; font-size:12px; color:#ffcc00; font-weight: bold; }
-        
-        /* コントローラー (左側に寄せる) */
-        #d-pad { 
-            position: absolute; bottom: 40px; left: 160px; /* ミニマップの横 */
-            z-index: 100; display: none; width: 180px;
-        }
-        .d-row { display: flex; justify-content: center; }
-        .d-btn { 
-            width: 50px; height: 50px; background: rgba(255, 255, 255, 0.2); 
-            border: 1px solid rgba(255,255,255,0.4); margin: 4px; border-radius: 12px; 
-            line-height: 50px; font-size: 24px; color: #fff; backdrop-filter: blur(4px);
-        }
+        .p-item.selected { border-color: var(--accent-gold); background: #444; }
 
-        /* ゴールオーバーレイ */
-        #overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 2000; display: none;
-            flex-direction: column; align-items: center; justify-content: center;
-        }
-        #overlay.show { display: flex; }
     </style>
 </head>
 <body>
 
-    <!-- 操作の要：トグルボタン -->
-    <button id="ui-toggle-btn"><span>⚙️</span> <span>メニュー</span></button>
+    <button id="ui-toggle-btn">⚙️ メニュー</button>
 
     <input type="file" id="fileInput" accept="image/*">
-    <input type="file" id="heroInput" accept="image/*">
     <input type="file" id="loadDataInput" accept=".json">
 
     <div id="ui-layer">
-        <div class="ui-scroll-container">
+        <div class="ui-scroll-area">
             <div class="panel">
-                <h1>🗺️ フロア管理</h1>
+                <h1>🏢 フロア・間取り</h1>
                 <div id="floor-list"></div>
-                <button class="btn btn-blue" id="addFloorBtn">＋ 新しい階を追加</button>
-                <button class="btn btn-green" id="selectImageBtn">📂 画像を読み込む</button>
+                <button class="btn btn-main" id="addFloorBtn">＋ 階を追加</button>
+                <button class="btn btn-success" id="selectImageBtn">📂 図面を読み込む</button>
             </div>
 
             <div class="panel">
-                <h1>🛠️ モード切替</h1>
-                <button id="editToggleBtn" class="btn btn-toggle">🛠️ 編集モード開始</button>
-                <button id="playModeBtn" class="btn btn-green">🎮 プレイモード (UI隠す)</button>
-                <button id="viewToggleBtn" class="btn">👁️ 表示切替 (画像/RPG)</button>
-                
-                <div id="editor-ui">
+                <h1>🛠️ 編集・バリアフリー</h1>
+                <button id="editToggleBtn" class="btn">🛠️ 編集モード開始</button>
+                <div id="editor-ui" style="display:none;">
                     <div class="palette">
-                        <div class="p-item" data-type="select" title="設定">✋</div>
-                        <div class="p-item" data-type="stairs_up" title="階段">📶</div>
-                        <div class="p-item" data-type="goal" title="ゴール">🌟</div>
-                        <div class="p-item" data-type="spawn" title="スタート">🏁</div>
-                        <div class="p-item selected" data-type="wall" title="壁">🧱</div>
-                        <div class="p-item" data-type="floor" title="床">⬜</div>
-                        <div class="p-item" data-type="concrete" title="外">🛣️</div>
-                        <div class="p-item" data-type="eraser" title="削除">❌</div>
+                        <div class="p-item selected" data-type="wall">🧱</div>
+                        <div class="p-item" data-type="floor">⬜</div>
+                        <div class="p-item" data-type="elevator">エレ</div>
+                        <div class="p-item" data-type="stairs">階段</div>
+                        <div class="p-item" data-type="spawn">🏁</div>
+                        <div class="p-item" data-type="goal">🌟</div>
+                        <div class="p-item" data-type="eraser">❌</div>
                     </div>
-                    <div class="slider-group" style="margin-top:15px;">
-                        <div class="slider-row">解析感度: <input type="range" id="sliderBlack" min="0" max="255" value="150"></div>
+                    <div style="margin-top:10px;">
+                        <input type="range" id="sliderBlack" min="0" max="255" value="150" style="width:100%;">
                     </div>
                 </div>
             </div>
 
             <div class="panel">
-                <h1>📱 機能・保存</h1>
-                <button id="guideBtn" class="btn btn-yellow">🦆 ゴールへのガイド</button>
-                <button id="nfcReadBtn" class="btn btn-purple">📡 NFC読取</button>
-                <div style="display:flex; gap:8px;">
-                    <button class="btn btn-cyan" id="saveDataBtn" style="flex:1">💾 保存</button>
-                    <button class="btn btn-cyan" id="loadDataBtn" style="flex:1">📂 読込</button>
+                <h1>🦆 MetaMap 案内</h1>
+                <button id="guideBtn" class="btn btn-warn">🦆 ゴールへの案内を開始</button>
+                <button id="playModeBtn" class="btn btn-success">🎮 探索に戻る</button>
+                <div id="status-bar">準備完了</div>
+            </div>
+
+            <div class="panel">
+                <h1>💾 データ</h1>
+                <div style="display:flex; gap:5px;">
+                    <button class="btn" id="saveBtn" style="flex:1">💾 保存</button>
+                    <button class="btn" id="loadBtn" style="flex:1">📂 読込</button>
                 </div>
-                <div id="status">準備完了</div>
-                <button class="btn btn-red" id="resetBtn" style="margin-top:20px;">⚠️ 初期化</button>
             </div>
         </div>
     </div>
 
-    <div id="minimap-container"><canvas id="minimap"></canvas></div>
+    <!-- ミニマップ拡大用の背景背景 -->
+    <div id="minimap-overlay"></div>
+    <div id="minimap-container" title="全体図を表示"><canvas id="minimap"></canvas></div>
+
     <div id="game-container"><canvas id="gameCanvas"></canvas></div>
     
     <div id="d-pad">
-        <div class="d-row"><div class="d-btn" id="btn-up">▲</div></div>
-        <div class="d-row"><div class="d-btn" id="btn-left">◀</div><div class="d-btn" id="btn-down">▼</div><div class="d-btn" id="btn-right">▶</div></div>
+        <div class="d-grid">
+            <div style="grid-column: 2;"><div class="d-btn" id="btn-up">▲</div></div>
+            <div class="d-btn" id="btn-left">◀</div>
+            <div class="d-btn" id="btn-down">▼</div>
+            <div class="d-btn" id="btn-right">▶</div>
+        </div>
     </div>
 
-    <!-- ゴール表示などは元のロジックを維持 -->
-    <div id="overlay">
-        <h2 style="color:gold; font-size:40px;">GOAL!!</h2>
-        <canvas id="material-preview" width="300" height="300" style="border:2px solid #fff;"></canvas>
-        <button class="btn btn-blue" id="close-overlay" style="width:200px; margin-top:20px;">閉じる</button>
+    <div id="goal-overlay" class="overlay">
+        <h2 style="color:var(--accent-gold); font-size:48px;">GOAL!!</h2>
+        <button class="btn btn-main" style="width:200px;" onclick="closeGoal()">探索に戻る</button>
     </div>
 
 <script>
-    // 基本設定
-    const MAP_RES = 600; TILE_SIZE = 8; MOVE_SPEED = 0.8; GUIDE_SPEED = 0.4;
-
+    const MAP_RES = 800; const TILE_SIZE = 8; const MOVE_SPEED = 0.8;
     const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
-    const uiToggleBtn = document.getElementById('ui-toggle-btn');
-    const uiLayer = document.getElementById('ui-layer');
-    const statusDiv = document.getElementById('status');
-    const overlay = document.getElementById('overlay');
+    const miniContainer = document.getElementById('minimap-container');
+    const miniOverlay = document.getElementById('minimap-overlay');
+    const uiLayer = document.getElementById('ui-layer'); const uiToggleBtn = document.getElementById('ui-toggle-btn');
+    const statusDiv = document.getElementById('status-bar');
 
     let floors = []; let curFloorIdx = 0;
     let player = { x: 0, y: 0 }; let camera = { x: 0, y: 0 };
     let isEditing = false; let currentTool = 'wall';
-    let heroImage = null; let facingRight = true;
+    let guideNPC = { x:0, y:0, active: false, path: [] };
     const keys = { Up: false, Down: false, Left: false, Right: false };
 
     class Floor {
         constructor(name) {
-            this.name = name; this.imageSrc = null; this.image = null;
+            this.name = name; this.image = null; this.imageSrc = null;
             this.cols = 0; this.rows = 0; this.grid = []; this.objs = [];
-            this.canvas = document.createElement('canvas'); this.ready = false; 
+            this.spawn = null; this.goal = null; this.ready = false;
+            this.canvas = document.createElement('canvas');
         }
     }
 
     function init() {
         window.addEventListener('resize', resize); resize();
         
-        // --- UIトグル処理の改善 ---
-        uiToggleBtn.addEventListener('click', () => {
-            const isHidden = uiLayer.classList.contains('hidden');
-            if(isHidden) {
-                uiLayer.classList.remove('hidden');
-                uiToggleBtn.classList.add('active');
-                uiToggleBtn.innerHTML = "<span>❌</span> <span>閉じる</span>";
-            } else {
-                uiLayer.classList.add('hidden');
-                uiToggleBtn.classList.remove('active');
-                uiToggleBtn.innerHTML = "<span>⚙️</span> <span>メニュー</span>";
-            }
+        // ミニマップ拡大トグル
+        miniContainer.onclick = () => {
+            const isExpanded = miniContainer.classList.toggle('expanded');
+            if(isExpanded) miniOverlay.classList.add('show');
+            else miniOverlay.classList.remove('show');
+        };
+
+        // 背景タップでもミニマップを閉じる
+        miniOverlay.onclick = () => {
+            miniContainer.classList.remove('expanded');
+            miniOverlay.classList.remove('show');
+        };
+
+        uiToggleBtn.onclick = () => {
+            uiLayer.classList.toggle('hidden');
+            uiToggleBtn.classList.toggle('active');
+            uiToggleBtn.innerText = uiLayer.classList.contains('hidden') ? "⚙️ メニュー" : "❌ 閉じる";
+        };
+
+        document.getElementById('selectImageBtn').onclick = () => document.getElementById('fileInput').click();
+        document.getElementById('fileInput').onchange = handleImageSelect;
+        document.getElementById('addFloorBtn').onclick = () => addFloor(prompt("階の名前"));
+        document.getElementById('editToggleBtn').onclick = toggleEditMode;
+        document.getElementById('playModeBtn').onclick = () => { uiLayer.classList.add('hidden'); uiToggleBtn.classList.remove('active'); };
+        document.getElementById('saveBtn').onclick = saveToJSON;
+        document.getElementById('loadBtn').onclick = () => document.getElementById('loadDataInput').click();
+        document.getElementById('loadDataInput').onchange = loadFromJSON;
+        document.getElementById('guideBtn').onclick = startGuiding;
+
+        document.querySelectorAll('.p-item').forEach(i => i.onclick = () => {
+            document.querySelectorAll('.p-item').forEach(x => x.classList.remove('selected'));
+            i.classList.add('selected'); currentTool = i.dataset.type;
         });
 
-        if ('ontouchstart' in window) {
-            document.getElementById('d-pad').style.display = 'block';
-            setupTouchControls();
-        }
+        if ('ontouchstart' in window) { document.getElementById('d-pad').style.display = 'block'; setupMobileControls(); }
 
-        addFloor("1階");
+        addFloor("1F");
         requestAnimationFrame(loop);
     }
 
-    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-
-    // ボタンとInput
-    document.getElementById('selectImageBtn').onclick = () => document.getElementById('fileInput').click();
-    document.getElementById('addFloorBtn').onclick = () => addFloor(prompt("階の名前を入力"));
-    
-    // 画像読み込み
-    document.getElementById('fileInput').onchange = (e) => {
+    function handleImageSelect(e) {
         const file = e.target.files[0]; if(!file) return;
-        const f = getCurFloor();
         const reader = new FileReader();
         reader.onload = (evt) => {
             const img = new Image();
             img.onload = () => {
+                const f = getCurFloor();
                 f.image = img; f.imageSrc = evt.target.result;
-                f.cols = Math.min(MAP_RES, img.width); f.rows = Math.floor(f.cols * (img.height / img.width));
-                f.canvas.width = f.cols*TILE_SIZE; f.canvas.height = f.rows*TILE_SIZE;
-                f.grid = Array(f.rows).fill().map(()=>Array(f.cols).fill(0));
-                autoAnalyze(f);
+                f.cols = Math.min(MAP_RES, img.width);
+                f.rows = Math.floor(f.cols * (img.height / img.width));
+                f.canvas.width = f.cols * TILE_SIZE; f.canvas.height = f.rows * TILE_SIZE;
+                f.grid = Array(f.rows).fill().map(() => Array(f.cols).fill(0));
+                analyzeFloor(f);
                 f.ready = true;
-                player.x = f.cols/2; player.y = f.rows/2;
+                player.x = f.cols / 2; player.y = f.rows / 2;
                 updateFloorList();
-                statusDiv.innerText = "読込完了";
             };
             img.src = evt.target.result;
         };
         reader.readAsDataURL(file);
-    };
-
-    function autoAnalyze(f) {
-        const tc = document.createElement('canvas'); tc.width=f.cols; tc.height=f.rows;
-        const tctx=tc.getContext('2d'); tctx.drawImage(f.image,0,0,f.cols,f.rows);
-        const data=tctx.getImageData(0,0,f.cols,f.rows).data;
-        const pBlack = document.getElementById('sliderBlack').value;
-        for(let y=0; y<f.rows; y++) for(let x=0; x<f.cols; x++) {
-            const i=(y*f.cols+x)*4; if((data[i]+data[i+1]+data[i+2])/3 < pBlack) f.grid[y][x]=1;
-        }
-        redrawFloor(f);
     }
 
-    function redrawFloor(f) {
+    function analyzeFloor(f) {
+        const tc = document.createElement('canvas'); tc.width = f.cols; tc.height = f.rows;
+        const tx = tc.getContext('2d'); tx.drawImage(f.image, 0, 0, f.cols, f.rows);
+        const data = tx.getImageData(0, 0, f.cols, f.rows).data;
+        const threshold = document.getElementById('sliderBlack').value;
+        for(let y=0; y<f.rows; y++) {
+            for(let x=0; x<f.cols; x++) {
+                const i = (y * f.cols + x) * 4;
+                if((data[i] + data[i+1] + data[i+2])/3 < threshold) f.grid[y][x] = 1;
+            }
+        }
+        renderFloorCanvas(f);
+    }
+
+    function renderFloorCanvas(f) {
         const c = f.canvas.getContext('2d');
-        c.fillStyle="#111"; c.fillRect(0,0,f.canvas.width,f.canvas.height);
+        c.clearRect(0, 0, f.canvas.width, f.canvas.height);
         if(f.image) c.drawImage(f.image, 0, 0, f.canvas.width, f.canvas.height);
-        for(let y=0; y<f.rows; y++) for(let x=0; x<f.cols; x++) {
-            if(f.grid[y][x]===1) { c.fillStyle="rgba(255, 0, 0, 0.4)"; c.fillRect(x*TILE_SIZE,y*TILE_SIZE,TILE_SIZE,TILE_SIZE); }
+        if(isEditing) {
+            c.fillStyle = "rgba(255, 0, 0, 0.3)";
+            for(let y=0; y<f.rows; y++) for(let x=0; x<f.cols; x++) if(f.grid[y][x]===1) c.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
         }
     }
 
-    function addFloor(name) {
-        const f = new Floor(name || (floors.length+1)+"階"); floors.push(f);
-        changeFloor(floors.length - 1);
+    function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
     }
-
-    function changeFloor(idx) {
-        curFloorIdx = idx; updateFloorList();
-    }
-
-    function getCurFloor() { return floors[curFloorIdx]; }
-
-    function updateFloorList() {
-        const list = document.getElementById('floor-list'); list.innerHTML = "";
-        floors.forEach((f, i) => {
-            const div = document.createElement('div');
-            div.className = "floor-item" + (i === curFloorIdx ? " active" : "");
-            div.innerHTML = `<span>${f.name}</span><span>${f.ready?"✅":""}</span>`;
-            div.onclick = () => changeFloor(i); list.appendChild(div);
-        });
-    }
-
-    function loop() { update(); draw(); requestAnimationFrame(loop); }
 
     function update() {
         const f = getCurFloor(); if(!f || !f.ready) return;
-        let mx=0, my=0;
-        if(keys.Up) my-=MOVE_SPEED; if(keys.Down) my+=MOVE_SPEED;
-        if(keys.Left) { mx-=MOVE_SPEED; facingRight=false; } if(keys.Right) { mx+=MOVE_SPEED; facingRight=true; }
-        
-        if(mx!==0 || my!==0) {
-            const nx = player.x + mx, ny = player.y + my;
-            if(!checkHit(f, nx, player.y)) player.x=nx;
-            if(!checkHit(f, player.x, ny)) player.y=ny;
+        let mx = 0, my = 0;
+        if(keys.Up) my -= MOVE_SPEED; if(keys.Down) my += MOVE_SPEED;
+        if(keys.Left) mx -= MOVE_SPEED; if(keys.Right) mx += MOVE_SPEED;
+        if(!checkWall(f, player.x + mx, player.y)) player.x += mx;
+        if(!checkWall(f, player.x, player.y + my)) player.y += my;
+
+        if(guideNPC.active && guideNPC.path.length > 0) {
+            const t = guideNPC.path[0];
+            const dx = t.x - guideNPC.x, dy = t.y - guideNPC.y;
+            const dist = Math.hypot(dx, dy);
+            if(dist < 1) guideNPC.path.shift();
+            else { guideNPC.x += dx/dist*0.5; guideNPC.y += dy/dist*0.5; }
         }
+
         camera.x += (canvas.width/2 - player.x*TILE_SIZE - camera.x) * 0.1;
         camera.y += (canvas.height/2 - player.y*TILE_SIZE - camera.y) * 0.1;
+
+        if(f.goal && Math.hypot(player.x - f.goal.x, player.y - f.goal.y) < 2) {
+            document.getElementById('goal-overlay').classList.add('show');
+            f.goal = null;
+        }
     }
 
-    function checkHit(f, x, y) {
-        if(x<0||x>=f.cols||y<0||y>=f.rows) return true;
+    function checkWall(f, x, y) {
+        if(x < 0 || x >= f.cols || y < 0 || y >= f.rows) return true;
+        if(f.objs.some(o => Math.hypot(o.x - x, o.y - y) < 1.5)) return false;
         return f.grid[Math.floor(y)][Math.floor(x)] === 1;
     }
 
     function draw() {
-        ctx.fillStyle="#111"; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height);
         const f = getCurFloor(); if(!f || !f.ready) return;
+
         ctx.save(); ctx.translate(camera.x, camera.y);
         ctx.drawImage(f.canvas, 0, 0);
-        // Player
-        ctx.fillStyle = "yellow";
-        ctx.fillRect(player.x*TILE_SIZE-10, player.y*TILE_SIZE-20, 20, 20);
+        f.objs.forEach(o => {
+            ctx.fillStyle = o.type === 'elevator' ? "#00f" : "#0f0";
+            ctx.fillRect(o.x*TILE_SIZE-10, o.y*TILE_SIZE-10, 20, 20);
+        });
+        if(f.goal) { ctx.font="30px serif"; ctx.fillText("🌟", f.goal.x*TILE_SIZE-15, f.goal.y*TILE_SIZE+10); }
+        if(guideNPC.active) { ctx.font = "24px serif"; ctx.fillText("🦆", guideNPC.x*TILE_SIZE-12, guideNPC.y*TILE_SIZE+12); }
+        ctx.fillStyle = "#ff0"; ctx.beginPath(); ctx.arc(player.x*TILE_SIZE, player.y*TILE_SIZE, 10, 0, Math.PI*2); ctx.fill();
         ctx.restore();
-        
-        // Minimap
+
+        // ミニマップ描画
         const mCtx = document.getElementById('minimap').getContext('2d');
-        document.getElementById('minimap').width = f.cols;
-        document.getElementById('minimap').height = f.rows;
+        document.getElementById('minimap').width = f.cols; document.getElementById('minimap').height = f.rows;
         mCtx.drawImage(f.canvas, 0, 0, f.cols, f.rows);
-        mCtx.fillStyle="red"; mCtx.fillRect(player.x-2, player.y-2, 4, 4);
+        mCtx.fillStyle = "red"; mCtx.fillRect(player.x-2, player.y-2, 4, 4);
+        if(f.goal) { mCtx.fillStyle = "gold"; mCtx.fillText("🌟", f.goal.x-5, f.goal.y+5); }
     }
 
-    function setupTouchControls() {
-        const bind = (id, k) => { 
-            const b=document.getElementById(id); 
-            b.ontouchstart=e=>{e.preventDefault();keys[k]=true}; 
-            b.ontouchend=e=>{e.preventDefault();keys[k]=false}; 
-        };
-        bind('btn-up','Up'); bind('btn-down','Down'); bind('btn-left','Left'); bind('btn-right','Right');
-    }
-
-    document.getElementById('editToggleBtn').onclick = (e) => {
+    function toggleEditMode() {
         isEditing = !isEditing;
         document.getElementById('editor-ui').style.display = isEditing ? "block" : "none";
-        e.target.innerText = isEditing ? "🛠️ 編集モード終了" : "🛠️ 編集モード開始";
-        e.target.classList.toggle('active');
-    };
+        const f = getCurFloor(); if(f) renderFloorCanvas(f);
+    }
 
-    document.getElementById('playModeBtn').onclick = () => {
-        uiLayer.classList.add('hidden');
-        uiToggleBtn.classList.remove('active');
-        uiToggleBtn.innerHTML = "<span>⚙️</span> <span>メニュー</span>";
-    };
+    function addFloor(name) { if(!name) return; floors.push(new Floor(name)); curFloorIdx = floors.length - 1; updateFloorList(); }
+    function getCurFloor() { return floors[curFloorIdx]; }
+    function updateFloorList() {
+        const list = document.getElementById('floor-list'); list.innerHTML = "";
+        floors.forEach((f, i) => {
+            const div = document.createElement('div'); div.className = "floor-item" + (i === curFloorIdx ? " active" : "");
+            div.innerHTML = `<span>${f.name}</span><span>${f.ready ? "✅" : "📄"}</span>`;
+            div.onclick = () => { curFloorIdx = i; updateFloorList(); };
+            list.appendChild(div);
+        });
+    }
 
+    function startGuiding() {
+        const f = getCurFloor(); if(!f.goal) return;
+        let open = [{x: Math.round(player.x), y: Math.round(player.y)}];
+        let cameFrom = new Map(); let visited = new Set();
+        let found = null;
+        for(let i=0; i<3000 && open.length>0; i++){
+            let curr = open.shift();
+            if(Math.hypot(curr.x-f.goal.x, curr.y-f.goal.y)<2){ found=curr; break; }
+            [[0,1],[0,-1],[1,0],[-1,0]].forEach(d => {
+                let nx=curr.x+d[0]*2, ny=curr.y+d[1]*2;
+                if(nx>=0 && nx<f.cols && ny>=0 && ny<f.rows && f.grid[ny][nx]!==1 && !visited.has(nx+","+ny)){
+                    visited.add(nx+","+ny); let node={x:nx, y:ny}; open.push(node); cameFrom.set(nx+","+ny, curr);
+                }
+            });
+        }
+        if(found){
+            let path = []; let c = found; while(c){ path.push(c); c = cameFrom.get(c.x+","+c.y); }
+            guideNPC = { x: player.x, y: player.y, active: true, path: path.reverse() };
+        }
+    }
+
+    function saveToJSON() {
+        const data = { floors: floors.map(f => ({ name: f.name, grid: f.grid, objs: f.objs, imageSrc: f.imageSrc, spawn: f.spawn, goal: f.goal })), curFloorIdx };
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], {type: 'application/json'})); a.download = "map_duck.json"; a.click();
+    }
+    function loadFromJSON(e) {
+        const file = e.target.files[0]; if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const data = JSON.parse(evt.target.result); floors = [];
+            data.floors.forEach(fd => {
+                const f = new Floor(fd.name); Object.assign(f, fd);
+                if(f.imageSrc) {
+                    const img = new Image(); img.onload = () => { f.image = img; f.ready = true; renderFloorCanvas(f); }; img.src = f.imageSrc;
+                }
+                floors.push(f);
+            });
+            curFloorIdx = data.curFloorIdx; updateFloorList();
+        };
+        reader.readAsText(file);
+    }
+
+    function closeGoal() { document.getElementById('goal-overlay').classList.remove('show'); }
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    function setupMobileControls() {
+        const b = (id, k) => {
+            const el = document.getElementById(id);
+            el.ontouchstart = (e) => { e.preventDefault(); keys[k] = true; };
+            el.ontouchend = (e) => { e.preventDefault(); keys[k] = false; };
+        };
+        b('btn-up','Up'); b('btn-down','Down'); b('btn-left','Left'); b('btn-right','Right');
+    }
     window.onkeydown = e => { if(e.code.includes('Arrow')) keys[e.code.replace('Arrow','')] = true; };
     window.onkeyup = e => { if(e.code.includes('Arrow')) keys[e.code.replace('Arrow','')] = false; };
 
