@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Map Duck V50 - Final Mobile Fix</title>
+    <style>
+        body {
+            background-color: #050505; color: #fff; font-family: sans-serif;
+            text-align: center; margin: 0; padding: 0;
+            overflow: hidden; height: 100vh; width: 100vw;
+            user-select: none; -webkit-user-select: none;
+            touch-action: none; /* 全体のスクロール防止 */
+        }
+
+        /* UIトグル */
+        #ui-toggle-btn {
+            position: absolute; top: 10px; left: 10px; z-index: 100;
+            background: #333; color: #fff; border: 1px solid #777;
+            padding: 8px 12px; cursor: pointer; border-radius: 4px; font-weight: bold;
+            font-size: 14px;
+        }
+
+        /* UIパネル */
+        #ui-layer {
+            position: absolute; top: 50px; left: 10px; z-index: 20;
+            text-align: left; pointer-events: none;
+            max-height: calc(100vh - 150px); overflow-y: auto; 
+            display: flex; flex-direction: column; gap: 10px;
+            transition: transform 0.3s ease;
+            /* パネル内はスクロール許可 */
+            touch-action: pan-y;
+        }
+        #ui-layer.hidden { transform: translateX(-150%); }
+        
+        .panel {
+            background: rgba(20, 20, 30, 0.9); padding: 10px; border-radius: 4px; 
+            border: 1px solid #777; pointer-events: auto; width: 240px;
+            backdrop-filter: blur(4px);
+        }
+
+        /* フロアリスト */
+        #floor-list {
+            margin-bottom: 5px; border-bottom: 1px solid #555; padding-bottom: 5px;
+            max-height: 100px; overflow-y: auto;
+        }
+        .floor-item {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(0,0,0,0.3); padding: 8px; margin-bottom: 4px; cursor: pointer; border: 1px solid #444;
+        }
+        .floor-item.active { background: #3e48d6; border-color: #fff; }
+
+        h1 { margin: 0 0 5px 0; font-size: 16px; color: #ffd700; border-bottom:1px solid #555; }
+        
+        /* ボタン類 */
+        .btn {
+            background: #444; color: white; border: 1px solid #fff;
+            padding: 8px; cursor: pointer; font-size: 12px; margin-bottom: 4px;
+            display: inline-block; width: 100%; box-sizing: border-box; text-align: center; border-radius: 4px;
+        }
+        .btn:active { transform: translateY(1px); }
+        .btn-blue { background: #3e48d6; }
+        .btn-green { background: #228b22; }
+        .btn-yellow { background: #daa520; color: #000; font-weight: bold; }
+        .btn-red { background: #8b0000; border-color: #f55; }
+        .btn-cyan { background: #008b8b; border-color: #0ff; color:#fff;}
+        .btn-toggle.active { background: #d63e3e; }
+
+        input[type="file"] { display: none; }
+        label.btn { display: inline-block; }
+        
+        .slider-row { margin-bottom: 8px; font-size: 11px; }
+        input[type=range] { width: 100%; height: 20px; }
+
+        /* キャンバス */
+        #game-container { position: relative; width: 100%; height: 100%; background-color: #111; }
+        canvas { display: block; image-rendering: pixelated; width: 100%; height: 100%; object-fit: contain; }
+
+        /* オーバーレイ */
+        #overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 200; pointer-events: auto; opacity: 0;
+            transition: opacity 0.5s; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            visibility: hidden; 
+        }
+        #overlay.show { opacity: 1; visibility: visible; }
+        #goal-message { font-size: 40px; color: gold; font-weight: bold; text-shadow: 0 0 20px orange; margin-bottom: 10px; }
+        #material-preview { border: 2px solid #fff; width: 300px; height: 300px; background: #000; object-fit: contain; }
+        
+        /* ミニマップ */
+        #minimap-container {
+            position: absolute; top: 10px; right: 10px; z-index: 30;
+            border: 2px solid #fff; background: #000;
+            cursor: pointer; transition: all 0.3s ease; width: 120px; overflow: hidden; 
+        }
+        #minimap { width: 100%; display: block; height: auto; }
+        #minimap-container.expanded {
+            width: 90vmin; top: 50%; left: 50%; right: auto;
+            transform: translate(-50%, -50%); border: 4px solid #ffd700; z-index: 90;
+        }
+
+        /* 編集パレット */
+        #editor-ui { border-top: 1px dashed #555; margin-top: 5px; padding-top: 5px; display: none; }
+        .palette { display: flex; flex-wrap: wrap; gap: 4px; margin-top:5px; }
+        .p-item {
+            width: 36px; height: 36px; border: 1px solid #444; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; background: #222; border-radius: 4px;
+        }
+        .p-item.selected { border-color: #fff; background: #555; box-shadow: 0 0 4px #fff; }
+        
+        #status { margin-top:5px; font-size:10px; color:#ffcc00; white-space: pre-wrap; }
+        
+        /* スマホ用コントローラー */
+        #d-pad { 
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); 
+            z-index: 40; display: none; width: 220px;
+        }
+        .d-row { display: flex; justify-content: center; }
+        .d-btn { 
+            width: 60px; height: 60px; background: rgba(255, 255, 255, 0.15); 
+            border: 2px solid rgba(255,255,255,0.3); margin: 5px; border-radius: 12px; 
+            line-height: 55px; font-size: 30px; color: #fff; backdrop-filter: blur(2px);
+        }
+        .d-btn:active { background: rgba(255, 255, 255, 0.4); }
+    </style>
+</head>
+<body>
+
+    <button id="ui-toggle-btn">⚙️ UI</button>
+
+    <div id="overlay">
+        <div id="goal-message">GOAL!!</div>
+        <div style="font-size:12px; color:#aaa; margin-bottom:10px;">動画生成中...</div>
+        <canvas id="material-preview" width="512" height="512"></canvas>
+        <div style="margin-top:20px;">
+            <button id="record-btn" class="btn btn-blue" style="width:auto; padding:10px 20px;">📹 保存 (.webm)</button>
+            <div id="rec-status" style="margin-top:10px; font-size:12px; color:#ffcc00;"></div>
+        </div>
+        <div style="margin-top:20px; cursor:pointer; text-decoration:underline; color:#aaa;" id="close-overlay">閉じて探索を続ける</div>
+    </div>
+
+    <div id="ui-layer">
+        <div class="panel">
+            <h1>Map Duck V50</h1>
+            
+            <!-- 保存・読込 -->
+            <div style="display:flex; gap:5px; margin-bottom:10px;">
+                <button class="btn btn-cyan" id="saveDataBtn">💾 保存</button>
+                <label class="btn btn-cyan">
+                    📂 読込
+                    <input type="file" id="loadDataInput" accept=".json">
+                </label>
+            </div>
+
+            <div id="floor-list"></div>
+            <button class="btn btn-blue" id="addFloorBtn">＋ 階を追加</button>
+            
+            <div style="margin-top:10px; border-top:1px dashed #555; padding-top:10px;">
+                <div style="font-size:10px; color:#ccc; margin-bottom:5px;">現在階に画像を読込:</div>
+                <label class="btn btn-green">
+                    📂 画像を選択
+                    <input type="file" id="fileInput" accept="image/*">
+                </label>
+            </div>
+            
+            <button class="btn btn-yellow" id="guideBtn" style="margin-top:5px;">🦆 ガイドを呼ぶ</button>
+            <label class="btn" style="background:#444;">🐥 キャラ変更<input type="file" id="heroInput" accept="image/*"></label>
+        </div>
+
+        <div class="panel">
+            <h1>設定 & 編集</h1>
+            <div class="slider-group">
+                <div class="slider-row">⚡ 線検出: <input type="range" id="sliderEdge" min="10" max="150" value="50"></div>
+                <div class="slider-row">🌑 インク: <input type="range" id="sliderBlack" min="0" max="255" value="150"></div>
+            </div>
+            
+            <button id="viewToggleBtn" class="btn">👁️ 元画像 / 🏰 RPG</button>
+            <button id="playModeBtn" class="btn btn-green">🎮 プレイモード</button>
+            <button id="editToggleBtn" class="btn btn-toggle">🛠️ 編集モード</button>
+            
+            <div id="editor-ui">
+                <div style="font-size:9px; color:#ccc; margin-bottom:5px;">✋:階段設定 | 🛣️:外 | 🧱:壁</div>
+                <div class="palette">
+                    <div class="p-item" data-type="select" title="✋ 設定/選択">✋</div>
+                    <div class="p-item" data-type="stairs_up" title="📶 階段/EV">📶</div>
+                    <div class="p-item" data-type="goal" title="🌟 ゴール">🌟</div>
+                    <div class="p-item" data-type="spawn" title="🏁 スタート">🏁</div>
+                    <div class="p-item selected" data-type="wall" title="🧱 壁">🧱</div>
+                    <div class="p-item" data-type="floor" title="⬜ 床">⬜</div>
+                    <div class="p-item" data-type="concrete" title="🛣️ 外">🛣️</div>
+                    <div class="p-item" data-type="eraser" title="❌ 削除">❌</div>
+                </div>
+            </div>
+            <div id="status">準備完了</div>
+            <button class="btn btn-red" id="resetBtn" style="margin-top:10px;">⚠️ 全リセット</button>
+        </div>
+    </div>
+
+    <div id="minimap-container" title="クリックで拡大"><canvas id="minimap"></canvas></div>
+    <div id="game-container"><canvas id="gameCanvas"></canvas></div>
+    
+    <!-- スマホ用コントローラー -->
+    <div id="d-pad">
+        <div class="d-row"><div class="d-btn" id="btn-up">▲</div></div>
+        <div class="d-row"><div class="d-btn" id="btn-left">◀</div><div class="d-btn" id="btn-down">▼</div><div class="d-btn" id="btn-right">▶</div></div>
+    </div>
+
+<script>
+    // --- 設定 ---
+    const MAP_RES = 600; TILE_SIZE = 8; MOVE_SPEED = 0.8; GUIDE_SPEED = 0.35; GUIDE_WAIT_DIST = 18.0;
+
+    // --- グローバル変数 ---
+    const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
+    const miniCanvas = document.getElementById('minimap'); const miniCtx = miniCanvas.getContext('2d');
+    const minimapContainer = document.getElementById('minimap-container');
+    const statusDiv = document.getElementById('status');
+    const overlay = document.getElementById('overlay');
+    const matCanvas = document.getElementById('material-preview'); const matCtx = matCanvas.getContext('2d');
+    const uiToggleBtn = document.getElementById('ui-toggle-btn'); const uiLayer = document.getElementById('ui-layer');
+
+    let floors = []; let curFloorIdx = 0;
+    let player = { x: 0, y: 0 }; let camera = { x: 0, y: 0 };
+    let guideNPC = { x: 0, y: 0, active: false, path: [], facingRight: true, isWaiting: false };
+    
+    let isEditing = false; let currentTool = 'wall'; let isMouseDown = false;
+    let showOriginal = false; let heroImage = null; let facingRight = true;
+    let pEdge = 50, pBlack = 150;
+    const keys = { Up: false, Down: false, Left: false, Right: false };
+
+    class Floor {
+        constructor(name) {
+            this.name = name; this.imageSrc = null; this.image = null;
+            this.cols = 0; this.rows = 0;
+            this.grid = []; this.objs = []; this.spawn = null; this.goal = null;
+            this.canvas = document.createElement('canvas');
+            this.ready = false; 
+        }
+    }
+
+    function init() {
+        window.addEventListener('resize', resize); resize();
+        minimapContainer.addEventListener('click', () => minimapContainer.classList.toggle('expanded'));
+        uiToggleBtn.addEventListener('click', toggleUI);
+        
+        // スマホ判定
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            document.getElementById('d-pad').style.display = 'block';
+            setupTouchControls();
+        }
+
+        addFloor("1階");
+        requestAnimationFrame(loop);
+        requestAnimationFrame(materialLoop);
+        
+        statusDiv.innerText = "画像を読み込んでください";
+    }
+
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    function toggleUI() {
+        uiLayer.classList.toggle('hidden');
+        uiToggleBtn.innerText = uiLayer.classList.contains('hidden') ? "⚙️ UI" : "⚙️ 隠す";
+    }
+
+    // --- 画像読込 (安定版) ---
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0]; if(!file) return;
+        const f = getCurFloor(); if(!f) { alert("フロアを選択してください"); return; }
+        
+        statusDiv.innerText = "読込中...";
+        statusDiv.style.color = "#ffff00";
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const img = new Image();
+            img.onload = () => {
+                f.image = img; f.imageSrc = evt.target.result;
+                f.cols = Math.min(MAP_RES, img.width);
+                f.rows = Math.floor(f.cols * (img.height / img.width));
+                f.canvas.width = f.cols*TILE_SIZE; f.canvas.height = f.rows*TILE_SIZE;
+                
+                // 強制描画
+                const c = f.canvas.getContext('2d');
+                c.drawImage(img, 0, 0, f.canvas.width, f.canvas.height);
+                f.grid = Array(f.rows).fill().map(()=>Array(f.cols).fill(0));
+                f.ready = true; f.objs = []; f.spawn = null; f.goal = null;
+                
+                respawnPlayer(); updateFloorList();
+                minimapContainer.style.display = 'block';
+                minimapContainer.classList.remove('expanded');
+                
+                statusDiv.innerText = "画像表示OK. 解析中...";
+                setTimeout(()=>{ 
+                    try{ autoAnalyze(f); statusDiv.innerText = "解析完了"; statusDiv.style.color = "#00ff00"; } 
+                    catch(e){ statusDiv.innerText = "手動モード"; console.log(e); } 
+                }, 100);
+            };
+            img.src = evt.target.result;
+        };
+        reader.readAsDataURL(file); e.target.value = "";
+    });
+
+    function autoAnalyze(f) {
+        const tc = document.createElement('canvas'); tc.width=f.cols; tc.height=f.rows;
+        const tctx=tc.getContext('2d'); tctx.drawImage(f.image,0,0,f.cols,f.rows);
+        const data=tctx.getImageData(0,0,f.cols,f.rows).data;
+        for(let y=0; y<f.rows; y++) for(let x=0; x<f.cols; x++) {
+            const i=(y*f.cols+x)*4;
+            if((data[i]+data[i+1]+data[i+2])/3 < pBlack) f.grid[y][x]=1;
+        }
+        redrawFloor(f);
+    }
+    
+    function redrawFloor(f) {
+        const c = f.canvas.getContext('2d');
+        c.fillStyle="#111"; c.fillRect(0,0,f.canvas.width,f.canvas.height);
+        if(f.image) c.drawImage(f.image, 0, 0, f.canvas.width, f.canvas.height);
+        for(let y=0; y<f.rows; y++) for(let x=0; x<f.cols; x++) {
+            const px=x*TILE_SIZE, py=y*TILE_SIZE, v=f.grid[y][x];
+            if(v===1) { c.fillStyle="rgba(180, 50, 50, 0.6)"; c.fillRect(px,py,TILE_SIZE,TILE_SIZE); }
+            else if(v===2) { c.fillStyle="rgba(100, 100, 100, 0.6)"; c.fillRect(px,py,TILE_SIZE,TILE_SIZE); }
+        }
+    }
+
+    // --- 階段・移動 ---
+    function addFloor(name) {
+        const f = new Floor(name || (floors.length+1)+"階"); floors.push(f);
+        changeFloor(floors.length - 1);
+    }
+
+    function changeFloor(idx) {
+        if(idx < 0 || idx >= floors.length) return;
+        curFloorIdx = idx; guideNPC.active = false;
+        updateFloorList();
+        const f = getCurFloor();
+        if(f.ready) {
+            statusDiv.innerText = f.name + " に移動";
+            if(!checkHit(f, player.x, player.y)) {} 
+            else if(f.spawn) { player.x=f.spawn.x; player.y=f.spawn.y; }
+            else respawnPlayer();
+        } else statusDiv.innerText = f.name + " (画像未設定)";
+    }
+
+    function getCurFloor() { return floors[curFloorIdx]; }
+    function updateFloorList() {
+        const list = document.getElementById('floor-list'); list.innerHTML = "";
+        floors.forEach((f, i) => {
+            const div = document.createElement('div');
+            div.className = "floor-item" + (i === curFloorIdx ? " active" : "");
+            div.innerHTML = `<span class="floor-name">${i}:${f.name}</span><span>${f.ready?"✅":"📄"}</span>`;
+            div.onclick = () => changeFloor(i);
+            list.appendChild(div);
+        });
+    }
+
+    function checkHit(f, x, y) {
+        if(x<0||x>=f.cols||y<0||y>=f.rows) return true;
+        // 階段等は通れる
+        for(let o of f.objs) if(['stairs_up','elevator','spawn','goal'].includes(o.type)) if(Math.abs(o.x-x)<1.5 && Math.abs(o.y-y)<1.5) return false;
+        return f.grid[Math.floor(y)][Math.floor(x)] === 1;
+    }
+
+    let lastWarp = 0; let goalAchieved = false;
+    function checkEvent(f) {
+        if(f.goal && !goalAchieved && Math.abs(player.x-f.goal.x)<2 && Math.abs(player.y-f.goal.y)<2) {
+            goalAchieved=true; showGoalOverlay();
+        }
+        if(Date.now()-lastWarp<2000) return;
+        for(let o of f.objs) if(['stairs_up','elevator'].includes(o.type) && Math.abs(player.x-o.x)<1.5 && Math.abs(player.y-o.y)<1.5) {
+            if(o.targetIdx!==undefined && floors[o.targetIdx]) { lastWarp=Date.now(); changeFloor(o.targetIdx); }
+        }
+    }
+
+    function respawnPlayer() {
+        const f=getCurFloor(); if(f.spawn){player.x=f.spawn.x;player.y=f.spawn.y;return;}
+        player.x=f.cols/2; player.y=f.rows/2;
+    }
+
+    // --- ガイド (絵文字) ---
+    document.getElementById('guideBtn').onclick = () => {
+        const f = getCurFloor(); if(!f.goal) {alert("ゴール設定必要"); return;}
+        statusDiv.innerText="経路計算中...";
+        setTimeout(() => {
+            let open=[{x:Math.round(player.x),y:Math.round(player.y),g:0,h:0,p:null}], closed=new Set();
+            let end={x:f.goal.x,y:f.goal.y};
+            // スタート/ゴールが壁なら近くの床を探す
+            if(f.grid[end.y][end.x]===1) {
+                // 簡易探索
+                for(let dy=-2; dy<=2; dy++) for(let dx=-2; dx<=2; dx++) 
+                    if(f.grid[end.y+dy][end.x+dx]===0) { end.x+=dx; end.y+=dy; break;}
+            }
+            
+            let found=null;
+            for(let i=0; i<10000 && open.length>0; i++) {
+                open.sort((a,b)=>(a.g+a.h)-(b.g+b.h));
+                let curr=open.shift();
+                if(Math.abs(curr.x-end.x)<2 && Math.abs(curr.y-end.y)<2) { found=curr; break; }
+                if(closed.has(curr.x+","+curr.y)) continue; closed.add(curr.x+","+curr.y);
+                [[0,1],[0,-1],[1,0],[-1,0]].forEach(d=>{
+                     let nx=curr.x+d[0], ny=curr.y+d[1];
+                     if(nx>=0 && nx<f.cols && ny>=0 && ny<f.rows && f.grid[ny][nx]!==1) 
+                        open.push({x:nx,y:ny,g:curr.g+1,h:Math.abs(nx-end.x)+Math.abs(ny-end.y),p:curr});
+                });
+            }
+            if(found) {
+                let path=[]; while(found.p){path.push({x:found.x,y:found.y}); found=found.p;}
+                guideNPC={x:player.x, y:player.y, active:true, path:path.reverse(), facingRight:true, isWaiting:false};
+                statusDiv.innerText="ガイド開始";
+            } else statusDiv.innerText="経路なし";
+        }, 10);
+    };
+
+    // --- メインループ ---
+    function loop() { if(!overlay.classList.contains('show')) { update(); draw(); drawMini(); } requestAnimationFrame(loop); }
+    function update() {
+        const f = getCurFloor(); if(!f || !f.ready) return;
+        if(guideNPC.active && guideNPC.path.length > 0) {
+            const t = guideNPC.path[0];
+            const dx = t.x - guideNPC.x, dy = t.y - guideNPC.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if(dist > GUIDE_WAIT_DIST) { guideNPC.isWaiting = true; guideNPC.facingRight = (player.x > guideNPC.x); }
+            else {
+                guideNPC.isWaiting = false;
+                if(dist < 0.2) { guideNPC.x=t.x; guideNPC.y=t.y; guideNPC.path.shift(); }
+                else { guideNPC.x+=dx/dist*GUIDE_SPEED; guideNPC.y+=dy/dist*GUIDE_SPEED; guideNPC.facingRight=dx>0; }
+                if(guideNPC.path.length===0) guideNPC.active=false;
+            }
+        }
+        let mx=0, my=0;
+        if(keys.Up) my-=MOVE_SPEED; if(keys.Down) my+=MOVE_SPEED;
+        if(keys.Left) { mx-=MOVE_SPEED; facingRight=false; } if(keys.Right) { mx+=MOVE_SPEED; facingRight=true; }
+        if(mx!==0 || my!==0) {
+            if(!checkHit(f, player.x+mx, player.y)) player.x+=mx;
+            if(!checkHit(f, player.x, player.y+my)) player.y+=my;
+            checkEvent(f);
+        }
+        const tx=canvas.width/2 - player.x*TILE_SIZE, ty=canvas.height/2 - player.y*TILE_SIZE;
+        camera.x+=(tx-camera.x)*0.2; camera.y+=(ty-camera.y)*0.2;
+    }
+
+    // --- 描画 ---
+    function draw() {
+        ctx.fillStyle="#111"; ctx.fillRect(0,0,canvas.width,canvas.height);
+        const f = getCurFloor(); if(!f || !f.ready) { ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.fillText("画像を読み込んでください", canvas.width/2, canvas.height/2); return; }
+        ctx.save(); ctx.translate(camera.x, camera.y);
+        if(showOriginal) ctx.drawImage(f.image, 0, 0, f.cols*TILE_SIZE, f.rows*TILE_SIZE); else ctx.drawImage(f.canvas, 0, 0);
+        
+        const s = TILE_SIZE*3;
+        for(let o of f.objs) {
+            const px=o.x*TILE_SIZE, py=o.y*TILE_SIZE;
+            if(o.type==='stairs_up'||o.type==='elevator') {
+                ctx.fillStyle=o.type==='elevator'?"#00f":"#0f0"; ctx.fillRect(px-s/2,py-s/2,s,s);
+                if(isEditing) { ctx.fillStyle="#fff"; ctx.font="10px sans-serif"; ctx.textAlign="center"; ctx.fillText(o.targetIdx!==undefined?("->"+floors[o.targetIdx].name):"未設定", px, py-s/2-5); }
+            } else { ctx.fillStyle="#a85"; ctx.fillRect(px-s/2,py-s/2,s,s); }
+        }
+        if(f.goal) { ctx.font="30px serif"; ctx.fillText("🌟", f.goal.x*TILE_SIZE-10, f.goal.y*TILE_SIZE+10); }
+        if(f.spawn && isEditing) { ctx.font="20px serif"; ctx.fillText("🏁", f.spawn.x*TILE_SIZE-10, f.spawn.y*TILE_SIZE+10); }
+
+        if(guideNPC.active) {
+            const gx=guideNPC.x*TILE_SIZE, gy=guideNPC.y*TILE_SIZE;
+            ctx.save(); ctx.translate(gx, gy); if(!guideNPC.facingRight) ctx.scale(-1,1);
+            ctx.globalAlpha=0.8; ctx.font=(TILE_SIZE*4)+"px sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("🦆",0,0);
+            ctx.restore();
+            if(guideNPC.isWaiting) { ctx.fillStyle="#fff"; ctx.font="12px sans-serif"; ctx.fillText("待機中...", gx, gy-25); }
+        }
+        drawChar(player.x*TILE_SIZE, player.y*TILE_SIZE, facingRight);
+        ctx.restore();
+    }
+    
+    function drawChar(x, y, right) {
+        const s = TILE_SIZE*4; ctx.save(); ctx.translate(x,y); if(!right) ctx.scale(-1,1);
+        if(heroImage) ctx.drawImage(heroImage,-s/2,-s,s,s); else { ctx.fillStyle="yellow"; ctx.fillRect(-s/2,-s,s,s); }
+        ctx.restore();
+    }
+
+    function drawMini() {
+        const f = getCurFloor(); if(!f||!f.ready) return;
+        miniCanvas.width=f.cols; miniCanvas.height=f.rows;
+        if(f.image) miniCtx.drawImage(f.image,0,0,f.cols,f.rows); else miniCtx.drawImage(f.canvas,0,0,f.cols,f.rows);
+        miniCtx.fillStyle="red"; miniCtx.fillRect(player.x-2,player.y-2,4,4);
+    }
+
+    // --- その他 ---
+    let matRafId = null;
+    function showGoalOverlay() { overlay.classList.add('show'); materialLoop(); }
+    function materialLoop() {
+        if (!overlay.classList.contains('show')) return;
+        const w=matCanvas.width, h=matCanvas.height, t=Date.now()*0.002;
+        matCtx.fillStyle="#000"; matCtx.fillRect(0,0,w,h);
+        for(let i=0; i<10; i++) {
+             const x = w/2 + Math.sin(t+i)*100, y = h/2 + Math.cos(t*0.5+i)*100;
+             matCtx.save(); matCtx.translate(x,y); matCtx.rotate(t+i);
+             if(heroImage) matCtx.drawImage(heroImage,-30,-30,60,60); else { matCtx.fillStyle="yellow"; matCtx.fillRect(-30,-30,60,60); }
+             matCtx.restore();
+        }
+        matRafId = requestAnimationFrame(materialLoop);
+    }
+    document.getElementById('close-overlay').onclick = () => { overlay.classList.remove('show'); goalAchieved=false; player.x-=3; cancelAnimationFrame(matRafId); };
+    
+    document.getElementById('record-btn').onclick = () => {
+        const stream = matCanvas.captureStream(30); const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
+        const chunks = []; recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'duck_material.webm'; a.click();
+            document.getElementById('rec-status').innerText = "完了";
+        };
+        recorder.start(); document.getElementById('rec-status').innerText = "録画中..."; setTimeout(() => recorder.stop(), 3000);
+    };
+
+    // UI
+    document.getElementById('editToggleBtn').onclick = () => { isEditing=!isEditing; document.getElementById('editor-ui').style.display=isEditing?"block":"none"; };
+    document.getElementById('playModeBtn').onclick = () => { isEditing=false; document.getElementById('editor-ui').style.display="none"; uiLayer.classList.add('hidden'); uiToggleBtn.innerText="⚙️ UI"; };
+    document.getElementById('viewToggleBtn').onclick = () => showOriginal=!showOriginal;
+    document.getElementById('ui-toggle-btn').onclick = () => { uiLayer.classList.toggle('hidden'); uiToggleBtn.innerText = uiLayer.classList.contains('hidden') ? "⚙️ UI" : "⚙️ 隠す"; };
+    
+    document.querySelectorAll('.p-item').forEach(el=>el.onclick=function(){ 
+        document.querySelectorAll('.p-item').forEach(i=>i.classList.remove('selected')); this.classList.add('selected'); currentTool=this.dataset.type; 
+    });
+
+    // Touch
+    function setupTouchControls() {
+        const bind = (id, k) => { const b=document.getElementById(id); b.ontouchstart=e=>{e.preventDefault();keys[k]=true}; b.ontouchend=e=>{e.preventDefault();keys[k]=false}; };
+        bind('btn-up','Up'); bind('btn-down','Down'); bind('btn-left','Left'); bind('btn-right','Right');
+        canvas.addEventListener('touchstart', e=>{if(isEditing){e.preventDefault(); handleInput(e.touches[0].clientX, e.touches[0].clientY, true);}}, {passive:false});
+        canvas.addEventListener('touchmove', e=>{if(isEditing){e.preventDefault(); handleInput(e.touches[0].clientX, e.touches[0].clientY, false);}}, {passive:false});
+    }
+
+    // Input Handler
+    function handleInput(cx, cy, click) {
+        if(click) isMouseDown=true;
+        const r=canvas.getBoundingClientRect(), gx=Math.floor((cx-r.left-camera.x)/TILE_SIZE), gy=Math.floor((cy-r.top-camera.y)/TILE_SIZE);
+        const f=getCurFloor(); if(!f) return;
+        if(click && currentTool==='select') {
+            const o = f.objs.find(ob => Math.abs(ob.x-gx)<3);
+            if(o && ['stairs_up','elevator'].includes(o.type)) { o.targetIdx = parseInt(prompt("階番号?", o.targetIdx||0)); }
+        }
+        else if(click && ['spawn','goal','stairs_up','elevator'].includes(currentTool)) {
+            if(currentTool==='spawn') f.spawn={x:gx,y:gy};
+            else if(currentTool==='goal') f.goal={x:gx,y:gy};
+            else f.objs.push({x:gx,y:gy,type:currentTool});
+            for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++) 
+                if(gy+dy>=0 && gy+dy<f.rows && gx+dx>=0 && gx+dx<f.cols) f.grid[gy+dy][gx+dx]=0;
+            redrawFloor(f);
+        }
+        else if(['wall','floor','concrete','eraser'].includes(currentTool)) {
+            if(currentTool==='wall') f.grid[gy][gx]=1;
+            else if(currentTool==='concrete') f.grid[gy][gx]=2;
+            else { f.grid[gy][gx]=0; if(currentTool==='eraser') f.objs=f.objs.filter(o=>Math.abs(o.x-gx)>2); }
+            redrawFloor(f);
+        }
+    }
+    
+    canvas.onmousedown = e => { if(isEditing) handleInput(e.clientX, e.clientY, true); };
+    canvas.onmousemove = e => { if(isEditing && isMouseDown) handleInput(e.clientX, e.clientY, false); };
+    window.onmouseup = () => isMouseDown=false;
+
+    // Save/Load
+    document.getElementById('saveDataBtn').onclick = () => {
+        const d = { floors: floors.map(f => ({ name: f.name, imageSrc: f.imageSrc, cols: f.cols, rows: f.rows, grid: f.grid, objs: f.objs, spawn: f.spawn, goal: f.goal })), player, curFloorIdx };
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(d)], {type: "application/json"})); a.download = "map_duck_data.json"; a.click();
+    };
+    document.getElementById('loadDataInput').onchange = (e) => {
+        const r = new FileReader(); r.onload = evt => {
+            const data = JSON.parse(evt.target.result);
+            floors = []; let cnt = 0;
+            data.floors.forEach(fd => {
+                const f = new Floor(fd.name); Object.assign(f, fd); floors.push(f);
+                if(f.imageSrc) { const i = new Image(); i.onload = () => { f.image = i; f.canvas.width=f.cols*TILE_SIZE; f.canvas.height=f.rows*TILE_SIZE; redrawFloor(f); f.ready=true; cnt++; if(cnt===data.floors.length){curFloorIdx=data.curFloorIdx; player=data.player; updateFloorList(); changeFloor(curFloorIdx);} }; i.src = f.imageSrc; }
+                else { f.ready=true; cnt++; if(cnt===data.floors.length){curFloorIdx=data.curFloorIdx; updateFloorList(); changeFloor(curFloorIdx);} }
+            });
+        }; r.readAsText(e.target.files[0]);
+    };
+
+    window.onkeydown = e => { if(e.code.includes('Arrow')) keys[e.code.replace('Arrow','')] = true; };
+    window.onkeyup = e => { if(e.code.includes('Arrow')) keys[e.code.replace('Arrow','')] = false; };
+    document.getElementById('heroInput').onchange = e => { const r=new FileReader(); r.onload=ev=>{heroImage=new Image(); heroImage.src=ev.target.result;}; r.readAsDataURL(e.target.files[0]); };
+    document.getElementById('resetBtn').onclick = () => location.reload();
+
+    init();
+</script>
+</body>
+</html>
